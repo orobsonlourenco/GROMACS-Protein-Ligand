@@ -101,70 +101,78 @@ perl sort_mol2_bonds.pl LIG.mol2 LIG.mol2 script
 ---------GROMACS UBUNTU TUTORIAL-----------
 source /usr/local/gromacs/bin/GMXRC	(If Gromacs is manually compiled / not for dirty install)  
 
-gmx pdb2gmx -f REC.pdb -ignh
-8 (CHARMM27)
+gmx pdb2gmx -f protein.pdb -o protein_processed.gro -ter -ignh
+1 (CHARMM36)
 1 (TIP3P)
-gmx editconf -f LIG.pdb -o LIG.gro
-gedit conf.gro LIG.gro
-*(Copy content from 3rd line of lig.gro to the conf.gro file up to the 2nd last line)
-*(Check the column number from where the lig.gro data ends (x) in conf.gro and replace the value in 2nd line by x-3)
-*(Open file in chimera to check ligand and receptor)
+0 NH3+
+0 COO-
+
+Após preparar o ligante executar:
+
+perl sort_mol2_bonds.pl lig.mol2 lig_fix.mol2
+
+python2 cgenff_charmm2gmx_py2.py LIG lig_fix.mol2 lig.str charmm36-jul2022.ff
+
+gmx editconf -f lig_ini.pdb -o lig.gro
+
+Build the complex
 
 -----EDIT THE FOLLOWING in topol.top -----
-gedit topol.top
-(add 
 
-; Include ligand topology 
-#include "LIG.itp"
+; Include Position restraint file
+#ifdef POSRES
+#include "posre.itp"
+#endif
 
-below- Include forcefield parameters
-#include "amberGS.ff/forcefield.itp")
+; Include ligand topology
+#include "lig.itp"
 
-AT THE BOTTOM OF THE SAME FILE PERFORM FOLLOWING CHANGES
-(add LIG 1
-align exactly below-
-Protein_chain_E     1)
+; Include water topology
+#include "./charmm36-jul2022.ff/tip3p.itp"
 
------EDIT THE FOLLOWING in lig.itp -----
 
-gedit lig.itp
+
+; Include forcefield parameters
+#include "./charmm36-jul2022.ff/forcefield.itp"
+
+; Include ligand parameters
+#include "lig.prm"
+
 [ moleculetype ]
-; Name nrexcl
-lig_gmx2 3
-TO
-[ moleculetype ]
-; Name nrexcl
-LIG 3
-(in certain cases this will already be LIG 3 so for such case no change is needed)
-
-----------
-
-gmx editconf -f conf.gro -d 1.0 -bt triclinic -o box.gro
-
-gmx solvate -cp box.gro -cs spc216.gro -p topol.top -o box_sol.gro
-
-gmx grompp -f ions.mdp -c box_sol.gro -p topol.top -o ION.tpr      
-(OR)
-gmx grompp -f ions.mdp -c box_sol.gro -maxwarn 2 -p topol.top -o ION.tpr
+; Name            nrexcl
+Protein_chain_A     3
 
 
-gmx genion -s ION.tpr -p topol.top -conc 0.1 -neutral -o box_sol_ion.gro
-15
+[ molecules ]
+; Compound        #mols
+Protein_chain_A     1
+LIG                 1
 
-gmx grompp -f EM.mdp -c box_sol_ion.gro -p topol.top -o EM.tpr     (OR)
-gmx grompp -f EM.mdp -c box_sol_ion.gro -maxwarn 2 -p topol.top -o EM.tpr
+----------Defining the Unit Cell & Adding Solvent------------
 
-gmx mdrun -v -deffnm EM
+gmx editconf -f complex.gro -o newbox.gro -bt dodecahedron -d 1.0
 
-gedit nvt.mdp (This file is already modified)
+gmx solvate -cp newbox.gro -cs spc216.gro -p topol.top -o solv.gro
 
-Now make index files
- 
-gmx make_ndx -f LIG.gro -o index_LIG.ndx
-	 > 0 & ! a H*
- 	 > q
+gmx grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr
 
-gmx genrestr -f LIG.gro -n index_LIG.ndx -o posre_LIG.itp -fc 1000 1000 1000
+gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral
+>escolher SOL
+
+-------------------Energy Minimization-----------------------------
+
+gmx grompp -f em.mdp -c solv_ions.gro -p topol.top -o em.tpr
+
+gmx mdrun -v -deffnm em
+
+------------------Equilibration-------------------------------
+
+gmx make_ndx -f lig.gro -o index_lig.ndx
+...
+ > 0 & ! a H*
+ > q
+
+gmx genrestr -f lig.gro -n index_lig.ndx -o posre_lig.itp -fc 1000 1000 1000
 	> select group "3"
 	
 Now, open topol.top file
@@ -178,27 +186,29 @@ Now, open topol.top file
 		#endif
 
 		"Here"
+		
+		; Include ligand topology
+        #include "jz4.itp"
 
 	add this 
 
 		; Ligand position restraints
-		#ifdef POSRES
-		#include "posre_LIG.itp"
-		#endif
+        #ifdef POSRES
+        #include "posre_lig.itp"
+        #endif
 
 Again, Make other Index file for System 
 
-gmx make_ndx -f EM.gro -o index.ndx
+gmx make_ndx -f em.gro -o index.ndx
 	
-	> 1 | 13
+	> 1 | 13 | 14
 	> q
 	
 -----[NVT]-----
-gedit NVT.mdp (This file is already modified)
 
-gmx grompp -f NVT.mdp -c EM.gro -r EM.gro -p topol.top -n index.ndx -maxwarn 2 -o NVT.tpr
-	
-gmx mdrun -deffnm NVT
+gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -n index.ndx -o nvt.tpr	
+
+gmx mdrun -deffnm nvt
 
 
 -----[NPT]-----
