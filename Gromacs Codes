@@ -212,31 +212,34 @@ gmx mdrun -deffnm nvt
 
 
 -----[NPT]-----
-gedit NPT.mdp (This file is already modified)
 
-gmx grompp -f NPT.mdp -c NVT.gro -r NVT.gro -p topol.top -n index.ndx -maxwarn 2 -o NPT.tpr
-	
-gmx mdrun -deffnm NPT
+gmx grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -n index.ndx -o npt.tpr
+or
+gmx grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -n index.ndx -maxwarn 2 -o npt.tpr
+
+gmx mdrun -deffnm npt
 
 -----[FINAL MD RUN/PRODUCTION]-----
 gedit NPT.mdp (Change MD RUN TIME as per your need)
 
-gmx grompp -f MD.mdp -c NPT.gro -t NPT.cpt -p topol.top -n index.ndx -maxwarn 2 -o MD.tpr
+gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md_0_10.tpr
+or
+gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -maxwarn 2 -o md.tpr
 
-gmx mdrun -deffnm MD
+gmx mdrun -deffnm md
 
 
 ----[Recentering and Rewrapping Coordinates]----
-gmx trjconv -s MD.tpr -f MD.xtc -o MD_center.xtc -center -pbc mol -ur compact
+gmx trjconv -s md.tpr -f md.xtc -o md_center.xtc -center -pbc mol -ur compact
 #Choose "Protein" for centering and "System" for output.
 
 #To extract the first frame (t = 0 ns) of the trajectory, use trjconv -dump with the recentered trajectory:
-gmx trjconv -s MD.tpr -f MD_center.xtc -o start.pdb -dump 0
+gmx trjconv -s md.tpr -f md_center.xtc -o start.pdb -dump 0
 
 
 ------RMSD Calculations-----
-gmx rms -s MD.tpr -f MD_center.xtc -o rmsd.xvg
-gmx rms -s MD.tpr -f MD_center.xtc -o rmsd.xvg -tu ns
+gmx rms -s md.tpr -f md_center.xtc -o rmsd.xvg
+gmx rms -s md.tpr -f md_center.xtc -o rmsd.xvg -tu ns
 4
 13
 
@@ -246,7 +249,7 @@ gmx rms -s MD.tpr -f MD_center.xtc -o rmsd.xvg -tu ns
 xmgrace rmsd.xvg
 
 ------RMSF Calculations-----
-gmx rmsf -s MD.tpr -f MD_center.xtc -o rmsf.xvg
+gmx rmsf -s md.tpr -f md_center.xtc -o rmsf.xvg
 4
 
 (Select appropritate Backbone open the output files in Grace)
@@ -254,19 +257,19 @@ gmx rmsf -s MD.tpr -f MD_center.xtc -o rmsf.xvg
 xmgrace output.xvg
 
 -----------h-bonds-------------------
-gmx hbond -s MD.tpr -f MD_center.xtc -num hb.xvg
-gmx hbond -s MD.tpr -f MD_center.xtc -num hb.xvg -tu ns
+gmx hbond -s md.tpr -f md_center.xtc -num hb.xvg
+gmx hbond -s md.tpr -f md_center.xtc -num hb.xvg -tu ns
 1
 13
 xmgrace hb.xvg
 
 --------------Gyration Radius------------------
-gmx gyrate -s MD.tpr -f MD_center.xtc -o gyrate1.xvg
+gmx gyrate -s md.tpr -f md_center.xtc -o gyrate.xvg
 #Choose the group of your choice 
-xmgrace gyrate1.xvg
+xmgrace gyrate.xvg
 
 -------------ENERGY Calculations---------------
-gmx energy -f MD.edr -o energy1.xvg
+gmx energy -f md.edr -o energy.xvg
 #Choose the option of your choice
-xmgrace -nxy energy1.xvg
+xmgrace -nxy energy.xvg
 
